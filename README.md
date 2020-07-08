@@ -22,7 +22,6 @@ Ex.
 - **Build Number:** The build number used for release notes.
 - **Github Organization:** This is the github organization used for requests.
 - **Github Repo:** This is the github repo used for requests.
-- **Build Number:** This is the build number to beuse for the build.
 - **Labels to remove from the github issues:** This is a comma seperated list of Github Labels to be removed when the build is processed.
 - **Labels to add to the github issues:** This is a comma seperated list of Github Labels to be added when the build is processed.
 - **Github Usernames for Comments:** This is a comma seperated list of Github Usernames used to alert them when builds are ready.

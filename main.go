@@ -114,33 +114,34 @@ func main() {
 	var issues []issue
 	allIssues := gjson.Get(string(body), "items")
 
-	for _, result := range allIssues.Array() {
-		// issue := issue{result.Get("number").String(), result.Get("title").String(), labels}
+	// for _, result := range allIssues.Array() {
+	// 	// issue := issue{result.Get("number").String(), result.Get("title").String(), labels}
 
-		// get comments for issue
-		commentsURL := githubURL + "/repos/roadtrippers/roadtrippers-ios/issues/" + result.Get("number").String() + "/comments"
-		req, err := newRequest("GET", commentsURL, nil)
-		if err != nil {
-			fmt.Printf("Error setting up github comments request:%v\n", err)
-			os.Exit(1)
-		}
+	// 	// get comments for issue
+	// 	commentsURL := githubURL + "/repos/roadtrippers/roadtrippers-ios/issues/" + result.Get("number").String() + "/comments"
+	// 	req, err := newRequest("GET", commentsURL, nil)
+	// 	if err != nil {
+	// 		fmt.Printf("Error setting up github comments request:%v\n", err)
+	// 		os.Exit(1)
+	// 	}
 
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			fmt.Printf("Error requesting Github comments %v\n", err)
-			os.Exit(1)
-		}
-		defer resp.Body.Close()
+	// 	resp, err := http.DefaultClient.Do(req)
+	// 	if err != nil {
+	// 		fmt.Printf("Error requesting Github comments %v\n", err)
+	// 		os.Exit(1)
+	// 	}
+	// 	defer resp.Body.Close()
 
-		body, err := ioutil.ReadAll(resp.Body)
+	// 	body, err := ioutil.ReadAll(resp.Body)
 
-		// Create issue structs
-		allComments := result.Array()
+	// 	// Create issue structs
+	// 	allComments := result.Array()
 
-		for _, result := range allComments.Array() {
+	// 	for _, result := range allComments.Array() {
 
-			fmt.Printf("COMMENTS %v\n", result)
-	}
+	// 		fmt.Printf("COMMENTS %v\n", result)
+	// 	}
+	// }
 
 	for _, result := range allIssues.Array() {
 		var labels []string

@@ -93,7 +93,7 @@ func main() {
 		fmt.Printf("Labels to add:%v\n", labelsToAddSlice)
 	}
 
-	encodedParams := url.PathEscape("q=branch:" + os.Getenv("BITRISE_GIT_BRANCH") + "+in:comments+repo:roadtrippers/roadtrippers-ios+state:open+label:\"needs build\"")
+	encodedParams := url.PathEscape("q=" + os.Getenv("BITRISE_GIT_BRANCH") + "+in:comments+repo:roadtrippers/roadtrippers-ios+state:open+label:\"needs build\"")
 	encodedURL := githubURL + "/search/issues?" + encodedParams
 	req, err := newRequest("GET", encodedURL, nil)
 	if err != nil {
@@ -113,6 +113,34 @@ func main() {
 	// Create issue structs
 	var issues []issue
 	allIssues := gjson.Get(string(body), "items")
+
+	for _, result := range allIssues.Array() {
+		// issue := issue{result.Get("number").String(), result.Get("title").String(), labels}
+
+		// get comments for issue
+		commentsURL := githubURL + "/repos/roadtrippers/roadtrippers-ios/issues/" + result.Get("number").String() + "/comments"
+		req, err := newRequest("GET", commentsURL, nil)
+		if err != nil {
+			fmt.Printf("Error setting up github comments request:%v\n", err)
+			os.Exit(1)
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			fmt.Printf("Error requesting Github comments %v\n", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+
+		// Create issue structs
+		allComments := result.Array()
+
+		for _, result := range allComments.Array() {
+
+			fmt.Printf("COMMENTS %v\n", result)
+	}
 
 	for _, result := range allIssues.Array() {
 		var labels []string

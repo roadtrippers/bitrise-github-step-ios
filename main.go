@@ -63,6 +63,14 @@ func main() {
 
 	fmt.Printf("Using build number %v for Github comments\n", buildNumber)
 
+	version := os.Getenv("version")
+	if len(buildversionNumber) == 0 {
+		fmt.Println("Error: No version found!")
+		os.Exit(1)
+	}
+
+	fmt.Printf("Using version %v for Github comments\n", version)
+
 	organization := os.Getenv("github_organization")
 	if len(organization) == 0 {
 		fmt.Println("Error: No organization found!")
@@ -184,7 +192,7 @@ func main() {
 
 			// make comments request
 			commentsURL := fmt.Sprintf("%s/repos/%s/%s/issues/%s/comments", githubURL, organization, repo, issue.Number)
-			commentsJSONString := []byte(fmt.Sprintf("{\"body\": \"%s This will be in build %s!\"}", usernameTags, buildNumber))
+			commentsJSONString := []byte(fmt.Sprintf("{\"body\": \"%s This will be in %s (%s)!\"}", usernameTags, version, buildNumber))
 			req, err = newRequest("POST", commentsURL, bytes.NewBuffer(commentsJSONString))
 			if err != nil {
 				fmt.Printf("Error setting up github comments request:%v\n", err)

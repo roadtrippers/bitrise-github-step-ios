@@ -19,6 +19,7 @@ Ex.
 ### Required Parameters:
 - **Github Username:** This is the Github username used for API authorization.
 - **Github Personal Access Token:** This is the token used for API authorization. Can be found in the Github account settings under Developer Settings.
+- **Version:** The version used for comments.
 - **Build Number:** The build number used for release notes.
 - **Github Organization:** This is the github organization used for requests.
 - **Github Repo:** This is the github repo used for requests.

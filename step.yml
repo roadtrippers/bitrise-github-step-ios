@@ -89,6 +89,14 @@ inputs:
       title: "Github Repo"
       summary: Github Repo.
       is_required: true
+      
+  - version:
+    opts:
+      title: "Version"
+      summary: The version
+      description: |
+        The version.
+      is_required: true
 
   - build_number:
     opts:

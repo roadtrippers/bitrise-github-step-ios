@@ -64,7 +64,7 @@ func main() {
 	fmt.Printf("Using build number %v for Github comments\n", buildNumber)
 
 	version := os.Getenv("version")
-	if len(buildversionNumber) == 0 {
+	if len(version) == 0 {
 		fmt.Println("Error: No version found!")
 		os.Exit(1)
 	}

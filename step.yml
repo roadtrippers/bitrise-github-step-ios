@@ -64,20 +64,6 @@ toolkit:
 
 
 inputs:
-  - github_username:
-    opts:
-      title: "Github Username"
-      summary: Github Username used for authentication.
-      is_required: true
-      is_sensitive: true
-  
-  - github_personal_access_token:
-    opts:
-      title: "Github Personal Access Token"
-      summary: Github Personal Access.
-      is_required: true
-      is_sensitive: true
-
   - github_organization:
     opts:
       title: "Github Organization"

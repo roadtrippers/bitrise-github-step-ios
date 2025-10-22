@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -32,20 +31,17 @@ func valueExistsInSlice(value string, slice []string) bool {
 
 func newRequest(method, url string, body io.Reader) (*http.Request, error) {
 
-	username := os.Getenv("github_username")
-	if len(username) == 0 {
-		fmt.Println("Error: No username found!")
-		os.Exit(1)
-	}
-
-	token := os.Getenv("github_personal_access_token")
-	if len(token) == 0 {
-		fmt.Println("Error: No token found!")
+	// Retrieve the GitHub App installation access token from an environment variable
+	// $GIT_HTTP_PASSWORD should be set automatically by the bitrise github app integration.
+	githubToken := os.Getenv("GIT_HTTP_PASSWORD")
+	if githubToken == "" {
+		fmt.Println("Error: GIT_HTTP_PASSWORD environment variable not set.")
 		os.Exit(1)
 	}
 
 	req, err := http.NewRequest(method, url, body)
-	req.SetBasicAuth(username, token)
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", githubToken))
 	req.Header.Set("Content-Type", "application/json")
 
 	return req, err
@@ -116,7 +112,7 @@ func main() {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 
 	// Create issue structs
 	var issues []issue
@@ -142,7 +138,7 @@ func main() {
 	// Construct release notes
 	var buf bytes.Buffer
 	for _, issue := range issues {
-		buf.WriteString(fmt.Sprintf("%s", issue.Title))
+		buf.WriteString(issue.Title)
 		buf.WriteString("\n")
 	}
 

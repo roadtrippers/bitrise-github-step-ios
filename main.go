@@ -31,11 +31,10 @@ func valueExistsInSlice(value string, slice []string) bool {
 
 func newRequest(method, url string, body io.Reader) (*http.Request, error) {
 
-	// Retrieve the GitHub App installation access token from an environment variable
-	// $GIT_HTTP_PASSWORD should be set automatically by the bitrise github app integration.
-	githubToken := os.Getenv("GIT_HTTP_PASSWORD")
+	// Retrieve the PAT stored as a secret in the bitrise setup.
+	githubToken := os.Getenv("GITHUB_PAT")
 	if githubToken == "" {
-		fmt.Println("Error: GIT_HTTP_PASSWORD environment variable not set.")
+		fmt.Println("Error: GITHUB_PAT environment variable not found.")
 		os.Exit(1)
 	}
 
@@ -43,6 +42,7 @@ func newRequest(method, url string, body io.Reader) (*http.Request, error) {
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", githubToken))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
 	return req, err
 }
@@ -170,6 +170,7 @@ func main() {
 	if len(issues) > 0 {
 		fmt.Printf("Issues found:%v\n", issues)
 		for _, issue := range issues {
+			var respBody []byte
 			// make labels request
 			labelsURL := fmt.Sprintf("%s/repos/%s/%s/issues/%s", githubURL, organization, repo, issue.Number)
 			labelsJSONString := []byte(`{"labels":[` + strings.Join(issue.Labels, ",") + `]}`)
@@ -184,7 +185,22 @@ func main() {
 				fmt.Printf("Error updating labels:%v\n", err)
 				os.Exit(1)
 			}
-			defer resp.Body.Close()
+
+			// Read response body to capture any error messages
+			respBody, err = io.ReadAll(resp.Body)
+			if err != nil {
+				fmt.Printf("Error reading labels response body:%v\n", err)
+				os.Exit(1)
+			}
+			resp.Body.Close()
+
+			// Check HTTP status code
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				fmt.Printf("Error updating labels: HTTP %d - %s\n", resp.StatusCode, string(respBody))
+				os.Exit(1)
+			}
+
+			fmt.Printf("Successfully updated labels for issue %s\n", issue.Number)
 
 			// make comments request
 			commentsURL := fmt.Sprintf("%s/repos/%s/%s/issues/%s/comments", githubURL, organization, repo, issue.Number)
@@ -200,7 +216,22 @@ func main() {
 				fmt.Printf("Error updating comments:%v\n", err)
 				os.Exit(1)
 			}
-			defer resp.Body.Close()
+
+			// Read response body to capture any error messages
+			respBody, err = io.ReadAll(resp.Body)
+			if err != nil {
+				fmt.Printf("Error reading comments response body:%v\n", err)
+				os.Exit(1)
+			}
+			resp.Body.Close()
+
+			// Check HTTP status code
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				fmt.Printf("Error updating comments: HTTP %d - %s\n", resp.StatusCode, string(respBody))
+				os.Exit(1)
+			}
+
+			fmt.Printf("Successfully added comment to issue %s\n", issue.Number)
 		}
 	} else {
 		fmt.Println("No issues found!")

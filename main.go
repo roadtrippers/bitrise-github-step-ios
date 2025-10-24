@@ -40,9 +40,11 @@ func newRequest(method, url string, body io.Reader) (*http.Request, error) {
 
 	req, err := http.NewRequest(method, url, body)
 
+	fmt.Println("Auth: " + fmt.Sprintf("Bearer %s", githubToken))
+
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", githubToken))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("Accept", "application/vnd.github+json")
 
 	return req, err
 }
@@ -97,7 +99,7 @@ func main() {
 		fmt.Printf("Labels to add:%v\n", labelsToAddSlice)
 	}
 
-	encodedParams := url.PathEscape("q=branch:" + os.Getenv("BITRISE_GIT_BRANCH") + "+in:comments+repo:roadtrippers/roadtrippers-ios+state:open+label:\"needs build\"")
+	encodedParams := url.PathEscape("q=is:issue+branch:" + os.Getenv("BITRISE_GIT_BRANCH") + "+in:comments+repo:roadtrippers/roadtrippers-ios+state:open+label:\"needs build\"")
 	encodedURL := githubURL + "/search/issues?" + encodedParams
 	req, err := newRequest("GET", encodedURL, nil)
 	if err != nil {
@@ -110,9 +112,20 @@ func main() {
 		fmt.Printf("Error requesting Github issues %v\n", err)
 		os.Exit(1)
 	}
-	defer resp.Body.Close()
 
+	// Read response body to capture any error messages
 	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error reading issues response body:%v\n", err)
+		os.Exit(1)
+	}
+	resp.Body.Close()
+
+	// Check HTTP status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		fmt.Printf("Error requesting Github issues: HTTP %d - %s\n", resp.StatusCode, string(body))
+		os.Exit(1)
+	}
 
 	// Create issue structs
 	var issues []issue
@@ -151,9 +164,9 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error setting RELEASE_NOTES environment variable:%v\n", err)
 		os.Exit(1)
+	} else {
+		fmt.Printf("Release Notes Created:%v\n", releaseNotes)
 	}
-
-	fmt.Printf("Release Notes Created:%v\n", releaseNotes)
 
 	githubUsernames := strings.Replace(os.Getenv("github_username_list"), " ", "", -1)
 	usernameTags := ""
@@ -171,9 +184,12 @@ func main() {
 		fmt.Printf("Issues found:%v\n", issues)
 		for _, issue := range issues {
 			var respBody []byte
+
 			// make labels request
 			labelsURL := fmt.Sprintf("%s/repos/%s/%s/issues/%s", githubURL, organization, repo, issue.Number)
+			fmt.Printf("Attempting to update labels for issue %s at URL: %s\n", issue.Number, labelsURL)
 			labelsJSONString := []byte(`{"labels":[` + strings.Join(issue.Labels, ",") + `]}`)
+			fmt.Printf("Labels JSON payload: %s\n", string(labelsJSONString))
 			req, err = newRequest("POST", labelsURL, bytes.NewBuffer(labelsJSONString))
 			if err != nil {
 				fmt.Printf("Error setting up github labels request:%v\n", err)

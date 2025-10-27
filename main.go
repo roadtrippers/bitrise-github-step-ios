@@ -40,8 +40,6 @@ func newRequest(method, url string, body io.Reader) (*http.Request, error) {
 
 	req, err := http.NewRequest(method, url, body)
 
-	fmt.Println("Auth: " + fmt.Sprintf("Bearer %s", githubToken))
-
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", githubToken))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/vnd.github+json")

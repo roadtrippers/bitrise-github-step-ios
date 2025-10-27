@@ -162,8 +162,6 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error setting RELEASE_NOTES environment variable:%v\n", err)
 		os.Exit(1)
-	} else {
-		fmt.Printf("Release Notes Created:%v\n", releaseNotes)
 	}
 
 	githubUsernames := strings.Replace(os.Getenv("github_username_list"), " ", "", -1)

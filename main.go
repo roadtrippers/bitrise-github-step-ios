@@ -97,7 +97,7 @@ func main() {
 		fmt.Printf("Labels to add:%v\n", labelsToAddSlice)
 	}
 
-	encodedParams := url.PathEscape("q=is:issue+branch:" + os.Getenv("BITRISE_GIT_BRANCH") + "+in:comments+repo:roadtrippers/roadtrippers-ios+state:open+label:\"needs build\"")
+	encodedParams := url.PathEscape(fmt.Sprintf("q=is:issue+branch:%s+in:comments+repo:%s/%s+state:open+label:\"needs build\"", os.Getenv("BITRISE_GIT_BRANCH"), organization, repo))
 	encodedURL := githubURL + "/search/issues?" + encodedParams
 	req, err := newRequest("GET", encodedURL, nil)
 	if err != nil {

@@ -34,7 +34,7 @@ Both tokens are short-lived and issued per run. Nothing long-lived is stored.
     - build_number: $BITRISE_BUILD_NUMBER
 ```
 
-4. **Delete the `GITHUB_PAT` secret** from Bitrise once a build has run end to end. Until then the step falls back to `GITHUB_PAT` if `GIT_HTTP_PASSWORD` is missing.
+4. **Delete the `GITHUB_PAT` secret** from Bitrise once a build has run end to end. The step no longer uses it.
 
 ### Parameters
 - **Github Organization / Github Repo** (required): the repo to search and dispatch to.

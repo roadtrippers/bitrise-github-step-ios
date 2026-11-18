@@ -60,20 +60,15 @@ func splitList(value string) []string {
 	return result
 }
 
-// githubToken prefers the short-lived installation token that the Bitrise
-// GitHub App integration injects into every build. GITHUB_PAT is only a
-// fallback while projects migrate and should be removed afterwards.
+// githubToken returns the short-lived installation token that the Bitrise
+// GitHub App integration injects into every build.
 func githubToken() string {
-	if token := os.Getenv("GIT_HTTP_PASSWORD"); token != "" {
-		fmt.Println("Authenticating with the Bitrise GitHub App token (GIT_HTTP_PASSWORD)")
-		return token
+	token := os.Getenv("GIT_HTTP_PASSWORD")
+	if token == "" {
+		fail("GIT_HTTP_PASSWORD not set. Is the Bitrise project connected through the GitHub App?")
 	}
-	if token := os.Getenv("GITHUB_PAT"); token != "" {
-		fmt.Println("Warning: GIT_HTTP_PASSWORD not set, falling back to GITHUB_PAT. Remove the PAT once the GitHub App is set up.")
-		return token
-	}
-	fail("Neither GIT_HTTP_PASSWORD (Bitrise GitHub App) nor GITHUB_PAT is set.")
-	return ""
+	fmt.Println("Authenticating with the Bitrise GitHub App token (GIT_HTTP_PASSWORD)")
+	return token
 }
 
 // githubRequest performs an authenticated request and returns the body,

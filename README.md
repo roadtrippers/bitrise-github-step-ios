@@ -6,21 +6,9 @@
 Creates release notes from the GitHub issues included in a build and stores them in `$RELEASE_NOTES`.
 It then sends a `repository_dispatch` event to the app repo. A GitHub Actions workflow there comments on those issues and moves their labels (for example `needs build` → `needs qa`).
 
-## Why it's split
-
-No personal access token is needed anywhere:
-
-| Part | Runs in | Auth | Needs |
-| --- | --- | --- | --- |
-| Find issues, build release notes, send dispatch | Bitrise (this step) | Bitrise GitHub App token, `$GIT_HTTP_PASSWORD` | Issues: read, Contents: write |
-| Comment + relabel issues | GitHub Actions | the workflow's own `GITHUB_TOKEN` | Issues: write |
-
-The Bitrise GitHub App can't get issues **write** permission, which is why the step can't do it all itself.
-Both tokens are short-lived and issued per run. Nothing long-lived is stored.
-
 ## Setup
 
-1. **Add the workflow to the app repo.** The app repo needs `.github/workflows/bitrise-build-ready.yml` on its **default branch** (`repository_dispatch` only runs workflows from the default branch). It's kept in the private app repos, not here. Copy it from `roadtrippers-ios` or `campendium-ios-v2`.
+1. **Add the workflow to the app repo.** The app repo needs `.github/workflows/bitrise-build-ready.yml` on its **default branch** (`repository_dispatch` only runs workflows from the default branch). It's kept in the private app repos, not here.
 2. **Extend the Bitrise token's permissions.** In Bitrise, go to Project settings → Repository and enable **Extend GitHub App permissions to builds**. Without it the token can only read code, so the issue search and the dispatch return 403 or 404.
 3. **Add the step** to `bitrise.yml` as a direct git clone:
 
@@ -28,13 +16,12 @@ Both tokens are short-lived and issued per run. Nothing long-lived is stored.
 - git::https://github.com/roadtrippers/bitrise-github-step-ios.git@master:
     title: Github Release Notes & Comments
     inputs:
-    - github_organization: roadtrippers
-    - github_repo: roadtrippers-ios
+    - github_organization: org_name
+    - github_repo: repo_name
     - version: $APP_VERSION
     - build_number: $BITRISE_BUILD_NUMBER
 ```
 
-4. **Delete the `GITHUB_PAT` secret** from Bitrise once a build has run end to end. The step no longer uses it.
 
 ### Parameters
 - **Github Organization / Github Repo** (required): the repo to search and dispatch to.

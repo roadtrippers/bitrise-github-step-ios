@@ -2,254 +2,195 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"github.com/tidwall/gjson"
 )
 
+var githubURL = "https://api.github.com"
+
 type issue struct {
-	Number string
+	Number int64
 	Title  string
-	Labels []string
 }
 
-func valueExistsInSlice(value string, slice []string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
+// dispatchPayload is sent as client_payload on the repository_dispatch event.
+// The GitHub Actions workflow in the target repo uses it to comment on and
+// relabel the issues. GitHub allows at most 10 top-level keys here.
+type dispatchPayload struct {
+	Version        string   `json:"version"`
+	BuildNumber    string   `json:"build_number"`
+	Branch         string   `json:"branch"`
+	Commit         string   `json:"commit"`
+	Issues         []int64  `json:"issues"`
+	LabelsToAdd    []string `json:"labels_to_add"`
+	LabelsToRemove []string `json:"labels_to_remove"`
+	Usernames      []string `json:"usernames"`
+}
+
+func fail(format string, a ...interface{}) {
+	fmt.Printf("Error: "+format+"\n", a...)
+	os.Exit(1)
+}
+
+func requireEnv(key, name string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		fail("No %s found!", name)
+	}
+	fmt.Printf("Using %s %v\n", name, value)
+	return value
+}
+
+// splitList turns a comma separated input into a trimmed slice, dropping empties.
+func splitList(value string) []string {
+	result := []string{}
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			result = append(result, item)
 		}
 	}
-	return false
+	return result
 }
 
-func newRequest(method, url string, body io.Reader) (*http.Request, error) {
+// githubToken prefers the short-lived installation token that the Bitrise
+// GitHub App integration injects into every build. GITHUB_PAT is only a
+// fallback while projects migrate and should be removed afterwards.
+func githubToken() string {
+	if token := os.Getenv("GIT_HTTP_PASSWORD"); token != "" {
+		fmt.Println("Authenticating with the Bitrise GitHub App token (GIT_HTTP_PASSWORD)")
+		return token
+	}
+	if token := os.Getenv("GITHUB_PAT"); token != "" {
+		fmt.Println("Warning: GIT_HTTP_PASSWORD not set, falling back to GITHUB_PAT. Remove the PAT once the GitHub App is set up.")
+		return token
+	}
+	fail("Neither GIT_HTTP_PASSWORD (Bitrise GitHub App) nor GITHUB_PAT is set.")
+	return ""
+}
 
-	// Retrieve the PAT stored as a secret in the bitrise setup.
-	githubToken := os.Getenv("GITHUB_PAT")
-	if githubToken == "" {
-		fmt.Println("Error: GITHUB_PAT environment variable not found.")
-		os.Exit(1)
+// githubRequest performs an authenticated request and returns the body,
+// exiting on transport errors or non-2xx responses.
+func githubRequest(token, method, requestURL string, body []byte, action string) []byte {
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
 	}
 
-	req, err := http.NewRequest(method, url, body)
-
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", githubToken))
+	req, err := http.NewRequest(method, requestURL, reader)
+	if err != nil {
+		fail("setting up request to %s: %v", action, err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/vnd.github+json")
-
-	return req, err
-}
-
-func main() {
-
-	githubURL := "https://api.github.com"
-
-	buildNumber := os.Getenv("build_number")
-	if len(buildNumber) == 0 {
-		fmt.Println("Error: No build number found!")
-		os.Exit(1)
-	}
-
-	fmt.Printf("Using build number %v for Github comments\n", buildNumber)
-
-	version := os.Getenv("version")
-	if len(version) == 0 {
-		fmt.Println("Error: No version found!")
-		os.Exit(1)
-	}
-
-	fmt.Printf("Using version %v for Github comments\n", version)
-
-	organization := os.Getenv("github_organization")
-	if len(organization) == 0 {
-		fmt.Println("Error: No organization found!")
-		os.Exit(1)
-	}
-
-	fmt.Printf("Using organization %v for requests\n", organization)
-
-	repo := os.Getenv("github_repo")
-	if len(repo) == 0 {
-		fmt.Println("Error: No repo found!")
-		os.Exit(1)
-	}
-
-	fmt.Printf("Using repo %v for requests\n", repo)
-
-	var labelsToRemoveSlice []string
-	labelsToRemove := os.Getenv("github_labels_to_remove")
-	if len(labelsToRemove) > 0 {
-		labelsToRemoveSlice = strings.Split(labelsToRemove, ",")
-		fmt.Printf("Labels to remove:%v\n", labelsToRemoveSlice)
-	}
-
-	var labelsToAddSlice []string
-	labelsToAdd := os.Getenv("github_labels_to_add")
-	if len(labelsToAdd) > 0 {
-		labelsToAddSlice = strings.Split(labelsToAdd, ",")
-		fmt.Printf("Labels to add:%v\n", labelsToAddSlice)
-	}
-
-	encodedParams := url.PathEscape(fmt.Sprintf("q=is:issue+branch:%s+in:comments+repo:%s/%s+state:open+label:\"needs build\"", os.Getenv("BITRISE_GIT_BRANCH"), organization, repo))
-	encodedURL := githubURL + "/search/issues?" + encodedParams
-	req, err := newRequest("GET", encodedURL, nil)
-	if err != nil {
-		fmt.Printf("Error setting up github issue request:%v\n", err)
-		os.Exit(1)
-	}
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		fmt.Printf("Error requesting Github issues %v\n", err)
-		os.Exit(1)
+		fail("requesting %s: %v", action, err)
 	}
+	defer resp.Body.Close()
 
-	// Read response body to capture any error messages
-	body, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("Error reading issues response body:%v\n", err)
-		os.Exit(1)
+		fail("reading response to %s: %v", action, err)
 	}
-	resp.Body.Close()
 
-	// Check HTTP status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		fmt.Printf("Error requesting Github issues: HTTP %d - %s\n", resp.StatusCode, string(body))
-		os.Exit(1)
-	}
-
-	// Create issue structs
-	var issues []issue
-	allIssues := gjson.Get(string(body), "items")
-
-	for _, result := range allIssues.Array() {
-		var labels []string
-		for _, label := range result.Get("labels").Array() {
-			labelName := label.Get("name").String()
-			if !valueExistsInSlice(labelName, labelsToRemoveSlice) && !valueExistsInSlice(labelName, labelsToAddSlice) {
-				labels = append(labels, strconv.Quote(labelName))
-			}
+		hint := ""
+		if resp.StatusCode == 403 || resp.StatusCode == 404 {
+			hint = " (check that \"Extend GitHub App permissions to builds\" is enabled in the Bitrise project's Repository settings)"
 		}
-
-		labels = append(labels, strconv.Quote(labelsToAdd))
-
-		fmt.Printf("Labels to update %v\n", labels)
-
-		issue := issue{result.Get("number").String(), result.Get("title").String(), labels}
-		issues = append(issues, issue)
+		fail("%s: HTTP %d - %s%s", action, resp.StatusCode, string(respBody), hint)
 	}
 
-	// Construct release notes
+	return respBody
+}
+
+func main() {
+	if override := os.Getenv("GITHUB_API_URL"); override != "" {
+		githubURL = strings.TrimSuffix(override, "/")
+	}
+
+	buildNumber := requireEnv("build_number", "build number")
+	version := requireEnv("version", "version")
+	organization := requireEnv("github_organization", "organization")
+	repo := requireEnv("github_repo", "repo")
+
+	eventType := os.Getenv("github_dispatch_event_type")
+	if eventType == "" {
+		eventType = "bitrise-build-ready"
+	}
+
+	branch := os.Getenv("BITRISE_GIT_BRANCH")
+	commit := os.Getenv("GIT_CLONE_COMMIT_HASH")
+	token := githubToken()
+
+	// Find the open issues waiting on this branch's build.
+	query := url.PathEscape(fmt.Sprintf("q=is:issue+branch:%s+in:comments+repo:%s/%s+state:open+label:\"needs build\"", branch, organization, repo))
+	searchBody := githubRequest(token, "GET", githubURL+"/search/issues?"+query, nil, "search GitHub issues")
+
+	var issues []issue
+	for _, result := range gjson.GetBytes(searchBody, "items").Array() {
+		issues = append(issues, issue{result.Get("number").Int(), result.Get("title").String()})
+	}
+
+	// Build release notes from the issue titles.
 	var buf bytes.Buffer
 	for _, issue := range issues {
 		buf.WriteString(issue.Title)
 		buf.WriteString("\n")
 	}
-
-	buf.WriteString(fmt.Sprintf("\n%s - %s", os.Getenv("BITRISE_GIT_BRANCH"), os.Getenv("GIT_CLONE_COMMIT_HASH")))
+	buf.WriteString(fmt.Sprintf("\n%s - %s", branch, commit))
 	releaseNotes := buf.String()
 
-	// Create environment variable for release notes
-	c := exec.Command("envman", "add", "--key", "RELEASE_NOTES", "--value", releaseNotes)
-	err = c.Run()
-	if err != nil { // Allow skipping release notes so test script is simpler.
+	if err := exec.Command("envman", "add", "--key", "RELEASE_NOTES", "--value", releaseNotes).Run(); err != nil {
+		// Allow skipping release notes so the test script can run outside Bitrise.
 		fmt.Printf("Error setting RELEASE_NOTES environment variable:%v\n", err)
-		fmt.Printf("Skipping Release Notes")
+		fmt.Println("Skipping Release Notes")
 	} else {
 		fmt.Printf("Release Notes Created:%v\n", releaseNotes)
 	}
 
-	githubUsernames := strings.Replace(os.Getenv("github_username_list"), " ", "", -1)
-	usernameTags := ""
-	if len(githubUsernames) > 0 {
-		githubUsernameSlice := strings.Split(githubUsernames, ",")
-		for _, username := range githubUsernameSlice {
-			usernameTags = usernameTags + "@" + username + " "
-		}
-		fmt.Printf("Usernames to notify:%v\n", usernameTags)
-	} else {
-		fmt.Println("No usernames found, not notifying github users.")
+	if len(issues) == 0 {
+		fmt.Println("No issues found, nothing to dispatch.")
+		os.Exit(0)
 	}
 
-	if len(issues) > 0 {
-		fmt.Printf("Issues found:%v\n", issues)
-		for _, issue := range issues {
-			var respBody []byte
-
-			// make labels request
-			labelsURL := fmt.Sprintf("%s/repos/%s/%s/issues/%s", githubURL, organization, repo, issue.Number)
-			fmt.Printf("Attempting to update labels for issue %s at URL: %s\n", issue.Number, labelsURL)
-			labelsJSONString := []byte(`{"labels":[` + strings.Join(issue.Labels, ",") + `]}`)
-			fmt.Printf("Labels JSON payload: %s\n", string(labelsJSONString))
-			req, err = newRequest("POST", labelsURL, bytes.NewBuffer(labelsJSONString))
-			if err != nil {
-				fmt.Printf("Error setting up github labels request:%v\n", err)
-				os.Exit(1)
-			}
-
-			resp, err = http.DefaultClient.Do(req)
-			if err != nil {
-				fmt.Printf("Error updating labels:%v\n", err)
-				os.Exit(1)
-			}
-
-			// Read response body to capture any error messages
-			respBody, err = io.ReadAll(resp.Body)
-			if err != nil {
-				fmt.Printf("Error reading labels response body:%v\n", err)
-				os.Exit(1)
-			}
-			resp.Body.Close()
-
-			// Check HTTP status code
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				fmt.Printf("Error updating labels: HTTP %d - %s\n", resp.StatusCode, string(respBody))
-				os.Exit(1)
-			}
-
-			fmt.Printf("Successfully updated labels for issue %s\n", issue.Number)
-
-			// make comments request
-			commentsURL := fmt.Sprintf("%s/repos/%s/%s/issues/%s/comments", githubURL, organization, repo, issue.Number)
-			commentsJSONString := []byte(fmt.Sprintf("{\"body\": \"%s This will be in %s (%s)!\"}", usernameTags, version, buildNumber))
-			req, err = newRequest("POST", commentsURL, bytes.NewBuffer(commentsJSONString))
-			if err != nil {
-				fmt.Printf("Error setting up github comments request:%v\n", err)
-				os.Exit(1)
-			}
-
-			resp, err = http.DefaultClient.Do(req)
-			if err != nil {
-				fmt.Printf("Error updating comments:%v\n", err)
-				os.Exit(1)
-			}
-
-			// Read response body to capture any error messages
-			respBody, err = io.ReadAll(resp.Body)
-			if err != nil {
-				fmt.Printf("Error reading comments response body:%v\n", err)
-				os.Exit(1)
-			}
-			resp.Body.Close()
-
-			// Check HTTP status code
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				fmt.Printf("Error updating comments: HTTP %d - %s\n", resp.StatusCode, string(respBody))
-				os.Exit(1)
-			}
-
-			fmt.Printf("Successfully added comment to issue %s\n", issue.Number)
-		}
-	} else {
-		fmt.Println("No issues found!")
+	// Hand the write work (comments + labels) to GitHub Actions in the target
+	// repo, which uses its own GITHUB_TOKEN. The Bitrise token can only read issues.
+	payload := dispatchPayload{
+		Version:        version,
+		BuildNumber:    buildNumber,
+		Branch:         branch,
+		Commit:         commit,
+		LabelsToAdd:    splitList(os.Getenv("github_labels_to_add")),
+		LabelsToRemove: splitList(os.Getenv("github_labels_to_remove")),
+		Usernames:      splitList(os.Getenv("github_username_list")),
 	}
+	for _, issue := range issues {
+		payload.Issues = append(payload.Issues, issue.Number)
+	}
+
+	body, err := json.Marshal(map[string]interface{}{
+		"event_type":     eventType,
+		"client_payload": payload,
+	})
+	if err != nil {
+		fail("encoding dispatch payload: %v", err)
+	}
+
+	fmt.Printf("Sending %s dispatch to %s/%s: %s\n", eventType, organization, repo, string(body))
+	githubRequest(token, "POST", fmt.Sprintf("%s/repos/%s/%s/dispatches", githubURL, organization, repo), body, "send repository_dispatch")
+	fmt.Printf("Dispatched %d issue(s) to GitHub Actions for comments and labels.\n", len(issues))
 
 	os.Exit(0)
 }

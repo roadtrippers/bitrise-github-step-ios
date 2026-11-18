@@ -4,7 +4,7 @@
 # Modify the values below to test with your specific configuration
 
 # Required environment variables
-export GITHUB_PAT="" #insert token
+export GIT_HTTP_PASSWORD="" #insert token (a PAT also works here for local testing)
 export build_number="3"
 export version="5.26.1"
 export github_organization="roadtrippers"
@@ -12,6 +12,7 @@ export github_repo="roadtrippers-ios"
 export github_labels_to_remove="needs build"
 export github_labels_to_add="needs qa"
 export github_username_list="dejanristic"
+export github_dispatch_event_type="bitrise-build-ready"
 export BITRISE_GIT_BRANCH="dr_bitrise_test" #insert branch
 export GIT_CLONE_COMMIT_HASH="abc123abc" #insert hash
 

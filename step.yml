@@ -10,9 +10,13 @@
 title: |-
   Github Management & Release Notes
 summary: |
-  Creates release notes from github issues, adds comments, and modifies labels
+  Creates release notes from github issues and hands comment/label updates to GitHub Actions
 description: |
-  Creates release notes and stores them in an environment variable.  Updates issues with comments and moves them to QA.
+  Creates release notes and stores them in an environment variable. Authenticates with the
+  Bitrise GitHub App token ($GIT_HTTP_PASSWORD), which can read issues but not write them,
+  so it sends a repository_dispatch event and a GitHub Actions workflow in the app repo
+  adds the comments and moves the labels. That workflow lives in each (private) app repo at
+  .github/workflows/bitrise-build-ready.yml.
 website: https://github.com/roadtrippers/bitrise-github-step-ios
 source_code_url: https://github.com/roadtrippers/bitrise-github-step-ios
 support_url: https://github.com/roadtrippers/bitrise-github-step-ios
@@ -104,6 +108,12 @@ inputs:
       summary: Comma seperated list of Github Labels
       is_required: false
     
+  - github_dispatch_event_type: "bitrise-build-ready"
+    opts:
+      title: "repository_dispatch event type"
+      summary: Event type sent to GitHub. Must match the `types` filter in the app repo's workflow.
+      is_required: false
+
   - github_username_list:
     opts:
       title: "Github Usernames for Comments"
